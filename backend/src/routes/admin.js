@@ -2,10 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { proteger, adminOnly } = require('../middlewares/authMiddleware');
 const User = require('../models/User');
-const Order = require('../models/Order');
-const Delivery = require('../models/Delivery');
+const Commande = require('../models/Commande');
 
-// Middleware - toutes les routes admin sont protégées
+// Toutes les routes admin sont protégées
 router.use(proteger);
 router.use(adminOnly);
 
@@ -18,27 +17,27 @@ router.get('/stats', async (req, res) => {
       totalUsers,
       totalClients,
       totalLivreurs,
-      totalOrders,
-      activeOrders,
-      deliveredOrders,
-      totalRevenue
+      totalCommandes,
+      commandesActives,
+      commandesLivrees,
+      revenusAgg
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ role: 'client' }),
       User.countDocuments({ role: 'livreur' }),
-      Order.countDocuments(),
-      Order.countDocuments({ status: { $in: ['pending', 'accepted', 'picked_up'] } }),
-      Order.countDocuments({ status: 'delivered' }),
-      Order.aggregate([
-        { $match: { status: 'delivered' } },
-        { $group: { _id: null, total: { $sum: '$price' } } }
+      Commande.countDocuments(),
+      Commande.countDocuments({ statut: { $in: ['en_attente', 'acceptee', 'en_cours'] } }),
+      Commande.countDocuments({ statut: 'livree' }),
+      Commande.aggregate([
+        { $match: { statut: 'livree' } },
+        { $group: { _id: null, total: { $sum: '$prix' } } }
       ])
     ]);
 
     res.json({
       users: { total: totalUsers, clients: totalClients, livreurs: totalLivreurs },
-      orders: { total: totalOrders, active: activeOrders, delivered: deliveredOrders },
-      revenue: totalRevenue[0]?.total || 0
+      commandes: { total: totalCommandes, actives: commandesActives, livrees: commandesLivrees },
+      revenus: revenusAgg[0]?.total || 0
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -54,12 +53,13 @@ router.get('/users', async (req, res) => {
     let query = {};
     if (role) query.role = role;
     if (search) query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } }
+      { nom:       { $regex: search, $options: 'i' } },
+      { prenom:    { $regex: search, $options: 'i' } },
+      { telephone: { $regex: search, $options: 'i' } },
+      { email:     { $regex: search, $options: 'i' } }
     ];
 
     const users = await User.find(query)
-      .select('-password')
       .sort({ createdAt: -1 });
 
     res.json(users);
@@ -68,7 +68,8 @@ router.get('/users', async (req, res) => {
   }
 });
 
-router.patch('/users/:id/toggle-block', async (req, res) => {
+// Bloquer / Débloquer
+router.patch('/users/:id/bloquer', async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé' });
@@ -76,15 +77,38 @@ router.patch('/users/:id/toggle-block', async (req, res) => {
     user.isBlocked = !user.isBlocked;
     await user.save();
 
-    res.json({ 
+    res.json({
       message: user.isBlocked ? 'Utilisateur bloqué' : 'Utilisateur débloqué',
-      isBlocked: user.isBlocked 
+      isBlocked: user.isBlocked
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Changer le rôle
+router.patch('/users/:id/role', async (req, res) => {
+  try {
+    const { role } = req.body;
+    const rolesValides = ['client', 'livreur', 'admin'];
+    if (!rolesValides.includes(role)) {
+      return res.status(400).json({ message: 'Rôle invalide' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé' });
+
+    res.json({ message: 'Rôle modifié', user });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Supprimer un user
 router.delete('/users/:id', async (req, res) => {
   try {
     await User.findByIdAndDelete(req.params.id);
@@ -95,40 +119,19 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 // =====================
-// GESTION COMMANDES
-// =====================
-router.get('/orders', async (req, res) => {
-  try {
-    const { status, city } = req.query;
-    let query = {};
-    if (status) query.status = status;
-    if (city) query['pickup.city'] = { $regex: city, $options: 'i' };
-
-    const orders = await Order.find(query)
-      .populate('client', 'name phone')
-      .populate('livreur', 'name phone')
-      .sort({ createdAt: -1 });
-
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// =====================
 // STATS LIVREURS
 // =====================
 router.get('/livreurs/stats', async (req, res) => {
   try {
-    const livreurs = await User.find({ role: 'livreur' }).select('-password');
-    
+    const livreurs = await User.find({ role: 'livreur' });
+
     const stats = await Promise.all(livreurs.map(async (livreur) => {
-      const [total, delivered, earnings] = await Promise.all([
-        Order.countDocuments({ livreur: livreur._id }),
-        Order.countDocuments({ livreur: livreur._id, status: 'delivered' }),
-        Order.aggregate([
-          { $match: { livreur: livreur._id, status: 'delivered' } },
-          { $group: { _id: null, total: { $sum: '$price' } } }
+      const [total, livrees, revenusAgg] = await Promise.all([
+        Commande.countDocuments({ livreur: livreur._id }),
+        Commande.countDocuments({ livreur: livreur._id, statut: 'livree' }),
+        Commande.aggregate([
+          { $match: { livreur: livreur._id, statut: 'livree' } },
+          { $group: { _id: null, total: { $sum: '$prix' } } }
         ])
       ]);
 
@@ -136,8 +139,8 @@ router.get('/livreurs/stats', async (req, res) => {
         ...livreur.toObject(),
         stats: {
           total,
-          delivered,
-          earnings: earnings[0]?.total || 0
+          livrees,
+          revenus: revenusAgg[0]?.total || 0
         }
       };
     }));
