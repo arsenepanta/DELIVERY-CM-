@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import API from '../../services/api';
 import toast from 'react-hot-toast';
+import NotificationToast from '../../components/NotificationToast';
+import { getSocket } from '../../services/socket';
 
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
@@ -12,7 +14,7 @@ export default function ClientDashboard() {
     adresseDepart: '',
     adresseArrivee: '',
     description: '',
-    poids: 0,
+    poids: 1,
     notes: ''
   });
 
@@ -25,17 +27,45 @@ export default function ClientDashboard() {
     }
   };
 
-  useEffect(() => { fetchCommandes(); }, []);
+  useEffect(() => {
+    fetchCommandes();
+  }, []);
 
-  const handleSubmit = async (e) => {
+  // 🔔 Écouter les mises à jour en temps réel
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket?.connected) return;
+
+    const handleCommandeAcceptee = (data) => {
+      setCommandes(prev =>
+        prev.map(c => c._id === data.commandeId ? { ...c, statut: 'acceptee', livreur: data } : c)
+      );
+    };
+
+    const handleStatutCommande = (data) => {
+      setCommandes(prev =>
+        prev.map(c => c._id === data.commandeId ? { ...c, statut: data.statut } : c)
+      );
+    };
+
+    socket.on('commande_acceptee', handleCommandeAcceptee);
+    socket.on('statut_commande', handleStatutCommande);
+
+    return () => {
+      socket.off('commande_acceptee', handleCommandeAcceptee);
+      socket.off('statut_commande', handleStatutCommande);
+    };
+  }, []);
+
+  const creerCommande = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await API.post('/commandes', form);
-      toast.success('✅ Commande passée avec succès !');
+      const res = await API.post('/commandes', form);
+      setCommandes([res.data, ...commandes]);
+      setForm({ adresseDepart: '', adresseArrivee: '', description: '', poids: 1, notes: '' });
       setShowForm(false);
-      setForm({ adresseDepart: '', adresseArrivee: '', description: '', poids: 0, notes: '' });
-      fetchCommandes();
+      toast.success('✅ Commande créée !');
     } catch (e) {
       toast.error(e.response?.data?.message || 'Erreur');
     } finally {
@@ -43,29 +73,32 @@ export default function ClientDashboard() {
     }
   };
 
-  const actives = commandes.filter(c => !['livree','annulee'].includes(c.statut)).length;
-  const livrees = commandes.filter(c => c.statut === 'livree').length;
-  const total   = commandes.filter(c => c.statut === 'livree').reduce((s, c) => s + (c.prix || 0), 0);
+  const enAttente = commandes.filter(c => c.statut === 'en_attente').length;
+  const enCours = commandes.filter(c => c.statut === 'en_cours').length;
+  const terminees = commandes.filter(c => c.statut === 'livree').length;
 
   const statutColor = {
     en_attente: 'bg-yellow-100 text-yellow-700',
-    acceptee:   'bg-blue-100 text-blue-700',
-    en_cours:   'bg-orange-100 text-orange-700',
-    livree:     'bg-green-100 text-green-700',
-    annulee:    'bg-red-100 text-red-700'
+    acceptee: 'bg-blue-100 text-blue-700',
+    en_cours: 'bg-orange-100 text-orange-700',
+    livree: 'bg-green-100 text-green-700',
+    annulee: 'bg-red-100 text-red-700'
   };
+
   const statutLabel = {
-    en_attente: 'En attente',
-    acceptee:   'Acceptée',
-    en_cours:   'En cours',
-    livree:     'Livrée',
-    annulee:    'Annulée'
+    en_attente: '⏳ En attente',
+    acceptee: '✅ Acceptée',
+    en_cours: '🚴 En cours',
+    livree: '🎉 Livrée',
+    annulee: '❌ Annulée'
   };
 
   return (
     <div className="min-h-screen bg-blue-50">
+      <NotificationToast role="client" />
+
       <nav className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">🚚 Delivery CM - Client</h1>
+        <h1 className="text-xl font-bold">📦 Delivery CM - Client</h1>
         <div className="flex items-center gap-4">
           <span>Bonjour, {user?.prenom || user?.nom}</span>
           <button onClick={logout} className="bg-white text-blue-600 px-3 py-1 rounded font-semibold">
@@ -77,120 +110,126 @@ export default function ClientDashboard() {
       <div className="p-6 max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-6">Mes commandes</h2>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-xl p-6 shadow text-center">
-            <p className="text-3xl font-bold text-blue-600">{actives}</p>
-            <p className="text-gray-500">Commandes actives</p>
+            <p className="text-3xl font-bold text-yellow-600">{enAttente}</p>
+            <p className="text-gray-500">En attente</p>
           </div>
           <div className="bg-white rounded-xl p-6 shadow text-center">
-            <p className="text-3xl font-bold text-green-600">{livrees}</p>
+            <p className="text-3xl font-bold text-orange-600">{enCours}</p>
+            <p className="text-gray-500">En cours</p>
+          </div>
+          <div className="bg-white rounded-xl p-6 shadow text-center">
+            <p className="text-3xl font-bold text-green-600">{terminees}</p>
             <p className="text-gray-500">Livrées</p>
-          </div>
-          <div className="bg-white rounded-xl p-6 shadow text-center">
-            <p className="text-3xl font-bold text-orange-600">{total} FCFA</p>
-            <p className="text-gray-500">Total dépensé</p>
           </div>
         </div>
 
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 mb-6"
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold mb-6 hover:bg-blue-700"
         >
-          {showForm ? '✕ Annuler' : '+ Nouvelle commande'}
+          ➕ Nouvelle commande
         </button>
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 shadow mb-6 space-y-4">
-            <h3 className="text-lg font-bold">Nouvelle commande</h3>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Adresse de départ</label>
-              <input
-                className="w-full border rounded p-2"
-                placeholder="Ex: Marché Mokolo, Yaoundé"
-                value={form.adresseDepart}
-                onChange={e => setForm({...form, adresseDepart: e.target.value})}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Adresse d'arrivée</label>
-              <input
-                className="w-full border rounded p-2"
-                placeholder="Ex: Bastos, face Ambassade"
-                value={form.adresseArrivee}
-                onChange={e => setForm({...form, adresseArrivee: e.target.value})}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Description du colis</label>
-              <input
-                className="w-full border rounded p-2"
-                placeholder="Ex: Documents administratifs"
-                value={form.description}
-                onChange={e => setForm({...form, description: e.target.value})}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Poids (kg)</label>
-              <input
-                className="w-full border rounded p-2"
-                type="number"
-                min="0"
-                step="0.1"
-                value={form.poids}
-                onChange={e => setForm({...form, poids: parseFloat(e.target.value) || 0})}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Prix estimé : {500 + (form.poids || 0) * 100} FCFA
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Notes (optionnel)</label>
-              <textarea
-                className="w-full border rounded p-2"
-                placeholder="Instructions supplémentaires..."
-                value={form.notes}
-                onChange={e => setForm({...form, notes: e.target.value})}
-                rows={2}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Envoi...' : 'Passer la commande'}
-            </button>
-          </form>
+          <div className="bg-white rounded-xl p-6 shadow mb-6">
+            <form onSubmit={creerCommande} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Adresse de départ</label>
+                <input
+                  type="text"
+                  required
+                  value={form.adresseDepart}
+                  onChange={(e) => setForm({ ...form, adresseDepart: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Douala, Akwa"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Adresse d'arrivée</label>
+                <input
+                  type="text"
+                  required
+                  value={form.adresseArrivee}
+                  onChange={(e) => setForm({ ...form, adresseArrivee: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Yaoundé, Centre"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Description</label>
+                <input
+                  type="text"
+                  required
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Colis fragile"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Poids (kg)</label>
+                <input
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  value={form.poids}
+                  onChange={(e) => setForm({ ...form, poids: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Notes (optionnel)</label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Instructions spéciales..."
+                  rows="3"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? '⏳ Création...' : '✅ Créer la commande'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-400"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
         )}
 
-        {/* Liste commandes */}
         <div className="space-y-4">
           {commandes.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">Aucune commande pour l'instant</p>
+            <p className="text-gray-500 text-center py-8">Aucune commande pour le moment</p>
           ) : (
-            commandes.map(c => (
-              <div key={c._id} className="bg-white rounded-xl p-4 shadow flex justify-between items-start">
-                <div className="space-y-1">
-                  <p className="font-semibold">{c.description}</p>
-                  <p className="text-sm text-gray-500">📦 {c.adresseDepart} → {c.adresseArrivee}</p>
-                  {c.livreur && (
-                    <p className="text-sm text-blue-600">🛵 Livreur : {c.livreur.nom} — {c.livreur.telephone}</p>
-                  )}
-                  <p className="text-sm font-semibold text-orange-600">{c.prix} FCFA</p>
+            commandes.map((c) => (
+              <div key={c._id} className="bg-white rounded-xl p-4 shadow">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="font-semibold text-lg">{c.description}</p>
+                    <p className="text-sm text-gray-500">📍 {c.adresseDepart} → {c.adresseArrivee}</p>
+                  </div>
+                  <span className={`text-xs px-3 py-1 rounded-full font-semibold ${statutColor[c.statut] || 'bg-gray-100 text-gray-700'}`}>
+                    {statutLabel[c.statut] || c.statut}
+                  </span>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${statutColor[c.statut] || 'bg-gray-100 text-gray-700'}`}>
-                  {statutLabel[c.statut] || c.statut}
-                </span>
+                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                  <p><strong>Poids:</strong> {c.poids} kg</p>
+                  <p><strong>Prix:</strong> {c.prix} FCFA</p>
+                  {c.livreur && <p className="col-span-2"><strong>Livreur:</strong> {c.livreur?.nom || 'Assigné'}</p>}
+                  {c.notes && <p className="col-span-2"><strong>Notes:</strong> {c.notes}</p>}
+                </div>
               </div>
             ))
           )}

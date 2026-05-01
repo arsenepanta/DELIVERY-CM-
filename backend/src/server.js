@@ -52,6 +52,7 @@ io.on('connection', (socket) => {
 // Rendre io accessible dans les controllers
 app.set('io', io);
 app.set('connectedUsers', connectedUsers);
+app.set('connectedUsers', connectedUsers);
 
 app.use(cors());
 app.use(express.json());
