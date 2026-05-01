@@ -1,0 +1,32 @@
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema({
+  nom: { type: String, required: true, trim: true },
+  prenom: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
+  telephone: { type: String, required: true },
+  motDePasse: { type: String, required: true, minlength: 6, select: false },
+  role: { type: String, enum: ['client', 'livreur', 'vendeur', 'admin'], default: 'client' },
+  ville: { type: String, default: 'Yaoundé' },
+  quartier: { type: String },
+  actif: { type: Boolean, default: true },
+
+   // 🚫 Nouveau champ pour bloquer un utilisateur
+  isBlocked: {
+    type: Boolean,
+    default: false
+  }
+}, { timestamps: true });
+
+userSchema.pre('save', async function() {
+  if (!this.isModified('motDePasse')) return;
+  const salt = await bcrypt.genSalt(10);
+  this.motDePasse = await bcrypt.hash(this.motDePasse, salt);
+});
+
+userSchema.methods.verifierMotDePasse = async function(motDePasseSaisi) {
+  return await bcrypt.compare(motDePasseSaisi, this.motDePasse);
+};
+
+module.exports = mongoose.model('User', userSchema);

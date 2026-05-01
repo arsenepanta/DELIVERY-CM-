@@ -1,0 +1,64 @@
+# DELIVERY-CM - SUIVI DU PROJET
+
+## 📅 Dernière mise à jour : Phase 1 terminée
+## ✅ Phase actuelle : 2 - Modèles de données
+
+---
+
+## PHASES DU PROJET
+
+### PHASE 1 - Setup & Architecture ✅ TERMINÉE
+- [x] Initialisation du projet
+- [x] Configuration MongoDB
+- [x] Structure des dossiers
+- [x] Variables d'environnement
+- [x] Serveur de base fonctionnel
+
+### PHASE 2 - Backend : Modèles de données ⬅️ ON EST ICI
+- [ ] Modèle User
+- [ ] Modèle Store
+- [ ] Modèle Product
+- [ ] Modèle Order
+- [ ] Modèle Delivery
+
+### PHASE 3 - Backend : API Routes (à venir)
+### PHASE 4 - Frontend (à venir)
+### PHASE 5 - Fonctionnalités Cameroun (à venir)
+### PHASE 6 - Tests & Déploiement (à venir)
+
+
+
+
+### PHASE 2 - Backend : Modèles de données ✅ TERMINÉE
+- [x] Modèle User (client, livreur, vendeur, admin)
+- [x] Modèle Store (restaurant, boutique, pharmacie...)
+- [x] Modèle Product
+- [x] Modèle Order (avec numéro auto CM-2024-XXXX)
+- [x] Modèle Delivery
+
+### PHASE 3 - Backend : API Routes ⬅️ PROCHAINE ÉTAPE
+- [ ] Auth (register, login)
+- [ ] Routes Stores
+- [ ] Routes Products
+- [ ] Routes Orders
+- [ ] Routes Delivery
+
+
+
+### PHASE 3 - Backend : API Routes ✅ TERMINÉE
+- [x] Middleware Auth (JWT)
+- [x] Middleware Erreurs
+- [x] Auth (inscription, connexion, profil)
+- [x] Routes Stores (CRUD + filtre par type/ville)
+- [x] Routes Products (CRUD par store)
+- [x] Routes Orders (passer commande, suivi statut)
+- [x] server.js mis à jour
+
+### PHASE 4 - Frontend React ⬅️ PROCHAINE ÉTAPE
+- [ ] Installation React + Tailwind
+- [ ] Design System couleurs Cameroun
+- [ ] Page d'accueil
+- [ ] Authentification
+- [ ] Liste des commerces
+- [ ] Panier & Commande
+
