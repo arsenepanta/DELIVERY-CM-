@@ -13,6 +13,12 @@ const commandeSchema = new mongoose.Schema({
     enum: ['en_attente', 'acceptee', 'en_cours', 'livree', 'annulee'],
     default: 'en_attente'
   },
+  livreurRefus: [{
+  livreur: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  raison: String,
+  date: Date
+}],
+
   notes: { type: String, default: '' }
 }, { timestamps: true });
 

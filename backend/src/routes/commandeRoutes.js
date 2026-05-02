@@ -3,8 +3,8 @@ const router = express.Router();
 const { proteger, autoriser } = require('../middlewares/authMiddleware');
 const {
   creerCommande, mesCommandes,
-  commandesDisponibles, accepterCommande, mesLivraisons, majStatut,
-  toutesCommandes
+  commandesDisponibles, accepterCommande, refuserCommande,
+  mesLivraisons, majStatut, toutesCommandes
 } = require('../controllers/commandeController');
 
 // Client
@@ -15,6 +15,7 @@ router.get('/mes-commandes', proteger, autoriser('client'), mesCommandes);
 router.get('/disponibles', proteger, autoriser('livreur'), commandesDisponibles);
 router.get('/mes-livraisons', proteger, autoriser('livreur'), mesLivraisons);
 router.put('/:id/accepter', proteger, autoriser('livreur'), accepterCommande);
+router.put('/:id/refuser', proteger, autoriser('livreur'), refuserCommande);
 router.put('/:id/statut', proteger, autoriser('livreur'), majStatut);
 
 // Admin

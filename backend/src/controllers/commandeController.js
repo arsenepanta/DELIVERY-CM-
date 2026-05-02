@@ -92,7 +92,6 @@ exports.accepterCommande = async (req, res) => {
     if (commande.statut !== 'en_attente') {
       return res.status(400).json({ message: 'Cette commande n\'est pas disponible' });
     }
-
     // Mettre à jour
     commande.livreur = req.user._id;
     commande.statut = 'acceptee';
@@ -116,6 +115,50 @@ exports.accepterCommande = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+exports.refuserCommande = async (req, res) => {
+  try {
+    const { raison } = req.body;
+    const commande = await Commande.findById(req.params.id)
+      .populate('client', 'nom telephone');
+
+    if (!commande) {
+      return res.status(404).json({ message: 'Commande non trouvée' });
+    }
+
+    if (commande.statut !== 'en_attente') {
+      return res.status(400).json({ message: 'Cette commande n\'est pas disponible' });
+    }
+
+    // Enregistrer le refus pour éviter de re-proposer au même livreur
+    if (!commande.livreurRefus) commande.livreurRefus = [];
+    commande.livreurRefus.push({
+      livreur: req.user._id,
+      raison: raison || 'Aucune raison',
+      date: new Date()
+    });
+
+    await commande.save();
+
+    // 🔔 Notifier tous les livreurs que la commande est toujours dispo
+    notifyAllLivreurs(req, 'nouvelle_commande', {
+      message: `📦 Commande disponible : ${commande.description}`,
+      commande: {
+        id: commande._id,
+        description: commande.description,
+        adresseDepart: commande.adresseDepart,
+        adresseArrivee: commande.adresseArrivee,
+        prix: commande.prix
+      }
+    });
+
+    res.json({ message: 'Commande refusée, remise en file d\'attente' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 
 // Livreur: mes livraisons
 exports.mesLivraisons = async (req, res) => {

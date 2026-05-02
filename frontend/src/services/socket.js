@@ -42,8 +42,8 @@ export const connectSocket = (userId, token) => {
   }
 
   // 🔒 ÉCOUTER LES ÉVÉNEMENTS DE BLOCAGE
-  socket.off('account_blocked');
-  socket.on('account_blocked', (data) => {
+  socket.off('compte_bloque');
+  socket.on('compte_bloque', (data) => {
     console.log('🔒 Compte bloqué:', data.message);
     if (onBlockedCallback) {
       onBlockedCallback(data);
