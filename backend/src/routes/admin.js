@@ -77,9 +77,31 @@ router.patch('/users/:id/bloquer', async (req, res) => {
     user.isBlocked = !user.isBlocked;
     await user.save();
 
+    // 🔔 NOTIFICATION SOCKET
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+    const socketId = connectedUsers[user._id?.toString()];
+
+    if (socketId) {
+      io.to(socketId).emit('compte_bloque', {
+        message: user.isBlocked 
+          ? '🔒 Votre compte a été bloqué par un admin'
+          : '✅ Votre compte a été débloqué',
+        isBlocked: user.isBlocked
+      });
+      console.log(`📨 Notification blocage → User ${user._id}`);
+    }
+
     res.json({
       message: user.isBlocked ? 'Utilisateur bloqué' : 'Utilisateur débloqué',
-      isBlocked: user.isBlocked
+      isBlocked: user.isBlocked,
+      user: {
+        _id: user._id,
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+        isBlocked: user.isBlocked
+      }
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -111,7 +133,20 @@ router.patch('/users/:id/role', async (req, res) => {
 // Supprimer un user
 router.delete('/users/:id', async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
+    const user = await User.findByIdAndDelete(req.params.id);
+    
+    // 🔔 Notifier si l'utilisateur était connecté
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+    const socketId = connectedUsers[user._id?.toString()];
+    
+    if (socketId) {
+      io.to(socketId).emit('compte_supprime', {
+        message: '❌ Votre compte a été supprimé'
+      });
+      delete connectedUsers[user._id?.toString()];
+    }
+
     res.json({ message: 'Utilisateur supprimé' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -136,10 +171,16 @@ router.get('/livreurs/stats', async (req, res) => {
       ]);
 
       return {
-        ...livreur.toObject(),
+        livreur: {
+          _id: livreur._id,
+          nom: livreur.nom,
+          prenom: livreur.prenom,
+          email: livreur.email,
+          telephone: livreur.telephone
+        },
         stats: {
-          total,
-          livrees,
+          totalCommandes: total,
+          commandesLivrees: livrees,
           revenus: revenusAgg[0]?.total || 0
         }
       };

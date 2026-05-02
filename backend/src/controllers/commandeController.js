@@ -1,4 +1,5 @@
 const Commande = require('../models/Commande');
+const User = require('../models/User');
 
 // ============ HELPER NOTIFICATION ============
 function notify(req, userId, event, data) {
@@ -13,8 +14,6 @@ function notify(req, userId, event, data) {
 
 function notifyAllLivreurs(req, event, data) {
   const io = req.app.get('io');
-  const connectedUsers = req.app.get('connectedUsers');
-  // Émet à tous les connectés (les livreurs filtreront côté client)
   io.emit(event, data);
 }
 
@@ -86,26 +85,33 @@ exports.accepterCommande = async (req, res) => {
     const commande = await Commande.findById(req.params.id)
       .populate('client', 'nom telephone');
 
-    if (!commande) return res.status(404).json({ message: 'Commande non trouvée' });
-    if (commande.statut !== 'en_attente') return res.status(400).json({ message: 'Commande déjà prise' });
+    if (!commande) {
+      return res.status(404).json({ message: 'Commande non trouvée' });
+    }
 
+    if (commande.statut !== 'en_attente') {
+      return res.status(400).json({ message: 'Cette commande n\'est pas disponible' });
+    }
+
+    // Mettre à jour
     commande.livreur = req.user._id;
     commande.statut = 'acceptee';
     await commande.save();
 
-    // 🔔 Notifier le CLIENT
+    // 🔔 Notifier le client
     notify(req, commande.client._id, 'commande_acceptee', {
-      message: `✅ Votre commande "${commande.description}" a été acceptée !`,
+      message: `✅ Votre commande a été acceptée !`,
       commandeId: commande._id,
-      livreurNom: req.user.nom,
-      livreurTel: req.user.telephone
+      livreur: {
+        nom: req.user.nom,
+        telephone: req.user.telephone
+      }
     });
 
-    // 🔔 Notifier les autres livreurs (commande plus dispo)
-    const io = req.app.get('io');
-    io.emit('commande_prise', { commandeId: commande._id });
-
-    res.json(commande);
+    res.json({
+      message: 'Commande acceptée',
+      commande
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

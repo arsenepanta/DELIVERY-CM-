@@ -17,6 +17,7 @@ const reponseUtilisateur = (user, token) => ({
   telephone: user.telephone,
   role: user.role,
   ville: user.ville,
+  isBlocked: user.isBlocked,
   token
 });
 
@@ -85,6 +86,14 @@ const connexion = async (req, res, next) => {
       });
     }
 
+    // 🔒 VÉRIFIER SI BLOQUÉ (AVANT LE MOT DE PASSE)
+    if (user.isBlocked) {
+      return res.status(403).json({
+        succes: false,
+        message: '🔒 Votre compte a été bloqué. Contactez le support.'
+      });
+    }
+
     // Vérifier le mot de passe
     const motDePasseValide = await user.verifierMotDePasse(motDePasse);
     if (!motDePasseValide) {
@@ -138,7 +147,7 @@ const modifierProfil = async (req, res, next) => {
   try {
     const champsAutorise = ['nom', 'prenom', 'telephone', 'ville', 'quartier', 'adresse', 'mobileMoney'];
     const miseAJour = {};
-    
+
     champsAutorise.forEach(champ => {
       if (req.body[champ] !== undefined) {
         miseAJour[champ] = req.body[champ];

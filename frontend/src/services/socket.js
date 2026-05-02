@@ -3,8 +3,9 @@ import { io } from 'socket.io-client';
 const SOCKET_URL = 'http://localhost:5000';
 
 let socket = null;
+let onBlockedCallback = null;
 
-export const connectSocket = (userId) => {
+export const connectSocket = (userId, token) => {
   if (!socket) {
     socket = io(SOCKET_URL, {
       autoConnect: false,
@@ -12,7 +13,10 @@ export const connectSocket = (userId) => {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 5,
-      transports: ['websocket', 'polling'], // WebSocket en priorité
+      transports: ['websocket', 'polling'],
+      auth: {
+        token: token // Envoyer le token au serveur
+      },
       cors: {
         origin: 'http://localhost:5173',
         methods: ['GET', 'POST']
@@ -37,8 +41,23 @@ export const connectSocket = (userId) => {
     socket.emit('identify', userId.toString());
   }
 
+  // 🔒 ÉCOUTER LES ÉVÉNEMENTS DE BLOCAGE
+  socket.off('account_blocked');
+  socket.on('account_blocked', (data) => {
+    console.log('🔒 Compte bloqué:', data.message);
+    if (onBlockedCallback) {
+      onBlockedCallback(data);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('👋 Socket déconnecté');
+  });
+
+  // Gestion des erreurs
+  socket.off('connect_error');
+  socket.on('connect_error', (error) => {
+    console.error('❌ Erreur de connexion socket:', error);
   });
 
   return socket;
@@ -51,4 +70,9 @@ export const disconnectSocket = () => {
     socket.disconnect();
     socket = null;
   }
+};
+
+// Callback pour gérer le blocage
+export const onAccountBlocked = (callback) => {
+  onBlockedCallback = callback;
 };

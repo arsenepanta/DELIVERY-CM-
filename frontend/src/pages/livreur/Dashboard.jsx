@@ -56,6 +56,7 @@ export default function LivreurDashboard() {
 
   const mesCours  = mesLivraisons.filter(c => ['acceptee','en_cours'].includes(c.statut));
   const terminees = mesLivraisons.filter(c => c.statut === 'livree');
+  const revenus   = terminees.reduce((sum, c) => sum + (c.prix || 0), 0);
 
   const liste = tab === 'disponibles' ? disponibles
               : tab === 'encours'     ? mesCours
@@ -78,22 +79,28 @@ export default function LivreurDashboard() {
 
       <div className="max-w-4xl mx-auto p-6">
 
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl shadow p-6 text-center">
+        {/* Stats : 4 cartes */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white rounded-2xl shadow p-5 text-center border-t-4 border-yellow-400">
             <p className="text-3xl font-bold text-yellow-500">{disponibles.length}</p>
-            <p className="text-gray-500">Disponibles</p>
+            <p className="text-gray-500 text-sm mt-1">Disponibles</p>
           </div>
-          <div className="bg-white rounded-2xl shadow p-6 text-center">
+          <div className="bg-white rounded-2xl shadow p-5 text-center border-t-4 border-purple-400">
             <p className="text-3xl font-bold text-purple-500">{mesCours.length}</p>
-            <p className="text-gray-500">En cours</p>
+            <p className="text-gray-500 text-sm mt-1">En cours</p>
           </div>
-          <div className="bg-white rounded-2xl shadow p-6 text-center">
+          <div className="bg-white rounded-2xl shadow p-5 text-center border-t-4 border-green-400">
             <p className="text-3xl font-bold text-green-500">{terminees.length}</p>
-            <p className="text-gray-500">Livrées</p>
+            <p className="text-gray-500 text-sm mt-1">Livrées</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow p-5 text-center border-t-4 border-orange-400">
+            <p className="text-2xl font-bold text-orange-500">{revenus.toLocaleString()}</p>
+            <p className="text-gray-500 text-sm mt-1">Revenus (FCFA)</p>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-6">
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 flex-wrap">
           <button
             onClick={() => setTab('disponibles')}
             className={`px-5 py-2 rounded-full font-medium transition ${tab === 'disponibles' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 shadow'}`}
@@ -114,6 +121,7 @@ export default function LivreurDashboard() {
           </button>
         </div>
 
+        {/* Liste */}
         <div className="space-y-4">
           {liste.length === 0 ? (
             <p className="text-gray-500 text-center py-12">Aucune commande dans cette catégorie</p>
@@ -136,7 +144,7 @@ export default function LivreurDashboard() {
                   <p><strong>👤 Client:</strong> {c.client?.nom || '—'}</p>
                   <p><strong>📞 Téléphone:</strong> {c.client?.telephone || '—'}</p>
                   <p><strong>⚖️ Poids:</strong> {c.poids} kg</p>
-                  <p><strong>💰 Prix:</strong> <span className="text-orange-500 font-semibold">{c.prix} FCFA</span></p>
+                  <p><strong>💰 Prix:</strong> <span className="text-orange-500 font-semibold">{c.prix?.toLocaleString()} FCFA</span></p>
                   {c.notes && <p className="col-span-2"><strong>📝 Notes:</strong> {c.notes}</p>}
                 </div>
 
